@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+SCRIPT_ROOT=$( cd `dirname $0`; pwd)
+PROJECT_ROOT=${PROJECT_ROOT:-$(cd $SCRIPT_ROOT/..; pwd)}
+GNUPGHOME=$PROJECT_ROOT/.gpg
+
+
+set -euo pipefail
+
+
+PRIVATE_KEY=${1?"Missing private key path"}; shift
+[[ !  -f $PRIVATE_KEY ]] && echo "$PRIVATE_KEY: Missing" && exit 1
+
+
+echo "GNUPGHOME=$GNUPGHOME"
+echo "Checking GNUPGHOME($GNUPGHOME)"
+[ ! -e $GNUPGHOME ] &&  echo "$GNUPGHOME: Not found" && exit 1
+
+KEY_ID=$(cat $PRIVATE_KEY | gpg --list-packets | grep keyid: | head -1 | awk {'print $2'})
+[[ -z $KEY_ID ]] && echo "Key ID not found" && exit 1
+
+gpg --keyserver pgp.mit.edu --send-keys $KEY_ID
+gpg --keyserver keys.openpgp.org  --send-keys $KEY_ID
+gpg --keyserver keys.gnupg.net  --send-keys $KEY_ID
+gpg --keyserver keyserver.ubuntu.com --send-keys $KEY_ID
+
+gpg -a --export $KEY_ID > $PRIVATE_KEY.pub
+gpg -a --export-secret-keys $KEY_ID > $PRIVATE_KEY
+
+rm -rf $GNUPGHOME
+
