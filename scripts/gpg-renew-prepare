@@ -43,6 +43,6 @@ echo export GNUPGHOME=$GNUPGHOME
 echo ===========================
 echo 
 echo ===========================
-echo READ: $PROJECT_ROOT/RENEW.md
+echo READ: $PROJECT_ROOT/RENEW.md or https://github.com/yogendra/gpg-renew/blob/main/RENEW.md
 echo ===========================
 
