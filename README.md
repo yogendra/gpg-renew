@@ -10,7 +10,7 @@
     cd gpg-renew
     direnv allow
     ```
-    **NOTE:** Skip `direnv` if you are not familier of using it
+    **NOTE:** Skip `direnv` if you are not familier in using it
 
 1.  Extract/Place GPG secret key into the directory. Example: `my-secretkey.pem`
 
