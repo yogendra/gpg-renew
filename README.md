@@ -7,38 +7,25 @@
     ```bash
     git clone <repo> gpg-renew
     cd gpg-renew
-    direnv allow
     ```
 
-    **NOTE:** Skip `direnv` if you are not familier in using it
+2. Extract/Place GPG secret key into the directory. Example: `<keyname>.secretkey.pem`
 
-1. Extract/Place GPG secret key into the directory. Example: `my-secretkey.pem`
-
-1. (If using `direnv`, skip this) Setup `GNUPGHOME` environment variable KEY_ID and PRIVATE_KEY
+3. Run `gpg-renew-auto` with key id (yogendrarampuria) and extension month(s) (6) as arguments
 
     ```bash
-    export GNUPGHOME=$PWD/.gpg
+    scripts/gpg-renew-auto yogendrarampuria 6
     ```
 
-    OR use your shell specific syntax
+4. Store away cert and revocation cert in safe place.
+   1. <keyid><date>.secretkey.pem (Backup of old key)
+   2. <keyid><date>.publickey.pem (Backup of old cert)
+   3. <keyid><date>.revocationcert.pem (Backup of old revocation key)
+   4. <keyid>.revocationcert.pem
+   5. <keyid>.publickey.pem
 
-1. Run `gpg-renew-prepare` with key id and private key file name as arguments
-
-    ```bash
-    scripts/gpg-renew-prepare yogendrarampuria.secretkey.pem
-    ```
-
-1. Follow instruction in the [renew page](RENEW.md) to renew expiry
-
-1. Finalize the (Publish and clean up) key
+5. Delete working area. Delete .gpg and exported files (*.pem, new and backup)
 
     ```bash
-    scripts/gpg-renew-finalize yogendrarampuria.secretkey.pem
-    ```
-
-1. Delete working area
-
-    ```bash
-    cd ..
-    rm -rf gpg-renew
+    rm -rf .gpg *.pem
     ```
