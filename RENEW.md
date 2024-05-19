@@ -194,4 +194,9 @@ At this point you have an isolated GnuPG home area. Now follow the step below to
     save
     ```
 
+## Non Interactive
+
+printf "expire\n6m\nsave\n" | gpg --batch --pinentry-mode loopback --command-fd 0 --status-fd=2 --edit-key $KEY_ID
+
 [source-blog]: https://blog.josefsson.org/2014/08/26/the-case-for-short-openpgp-key-validity-periods/#more-782
+

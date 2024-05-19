@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+banner() {
+  local message="$1"
+  local width=60  # Adjust width as needed
+  local padding=$(( (width - ${#message}) / 2 ))
+
+  echo
+  printf '%*s\n' $((padding + ${#message})) "$message"
+  printf '=%.0s' $(seq 1 $width)
+  echo
+}
+
+# 1. Get Parameters and Validate
+if [ $# -ne 2 ]; then
+  echo "Usage: $0 <key_name> <expiration_in_months>"
+  exit 1
+fi
+
+KEY_NAME="$1"
+EXPIRATION_MONTHS="$2"
+
+# Set GNUPG_HOME to the private directory
+GNUPG_HOME="$PWD/.gpg"
+export GNUPG_HOME
+
+# Create GNUPG_HOME directory if it doesn't exist
+if [ ! -d "$GNUPG_HOME" ]; then
+  mkdir "$GNUPG_HOME"
+  chmod 700 "$GNUPG_HOME"
+fi
+
+# Check if key files exist in current directory (KEY_DIR)
+if [ ! -f "$KEY_NAME.secretkey.pem" ] || \
+   [ ! -f "$KEY_NAME.publickey.pem" ]; then
+  echo "Error: Key or certificate files not found in the current directory."
+  exit 1
+fi
+
+banner "Importing Keys"
+# 2. Load Keys from KEY_DIR
+gpg --homedir "$GNUPG_HOME" --import "$KEY_NAME.secretkey.pem" "$KEY_NAME.publickey.pem"
+# 3. Extract Key ID
+KEY_ID=$(gpg --homedir "$GNUPG_HOME" --list-secret-keys --with-colons | awk -F ':' '$1 == "sec" {print $5}' | head -n 1)
+
+if [ -z "$KEY_ID" ]; then
+  echo "Error: Could not determine Key ID."
+  exit 1
+fi
+
+echo 'trust\n5\ny\nsave' | gpg --homedir "$GNUPG_HOME" --expert --command-fd=0 --batch --edit-key $KEY_ID
+gpg --homedir "$GNUPG_HOME" -K --with-subkey-fingerprint --list-options=show-unusable-subkeys
+
+echo "Imported Key ID: $KEY_ID"
+
+banner "Backing Up Existing Keys"
+# 4. Backup Existing Keys with Timestamp in KEY_DIR
+TIMESTAMP=$(date +%Y-%m-%d)
+mv "$KEY_NAME.secretkey.pem" "$KEY_NAME-$TIMESTAMP.secretkey.pem"
+mv "$KEY_NAME.publickey.pem" "$KEY_NAME-$TIMESTAMP.publickey.pem"
+
+banner "Setting Key Expiration for Main Key and All Subkeys"
+echo -e "expire\n${EXPIRATION_MONTHS}m\nsave\n" | gpg --homedir "$GNUPG_HOME" --expert --command-fd 0 --batch --edit-key "$KEY_ID"
+echo -e "key 1\nkey 2\nexpire\ny\n${EXPIRATION_MONTHS}m\ny\nsave\n" | gpg --homedir "$GNUPG_HOME" --expert --command-fd 0 --batch --edit-key "$KEY_ID"
+
+
+gpg --homedir "$GNUPG_HOME" -K --with-subkey-fingerprint --list-options=show-unusable-subkeys
+
+banner "Extracting New Certificate"
+# 6. Extract New Certificate
+gpg --homedir "$GNUPG_HOME" --output "$KEY_NAME.publickey.pem" --export "$KEY_ID"
+
+banner "Publishing to Keyservers"
+# # 7. Publish to Keyservers (Add more keyservers as needed)
+for KID in $(gpg --homedir "$GNUPG_HOME" -K --with-subkey-fingerprint --list-options=show-unusable-subkeys --with-colons | awk -F ':' '$1 == "fpr" {print $10}' )
+do
+  gpg --homedir "$GNUPG_HOME" --keyserver hkps://keys.openpgp.org --send-keys "$KID"
+  gpg --homedir "$GNUPG_HOME" --keyserver hkp://keyserver.ubuntu.com --send-keys "$KID"
+done
+
+
+banner "Generating Revocation Certificate"
+# 8. Generate Revocation Certificate (Non-interactively, directly in KEY_DIR)
+rm "$KEY_NAME.revocationcert.pem"
+echo -e "y\n1\nDO NOT USE\n\ny\n" | gpg --homedir "$GNUPG_HOME" --command-fd=0 --output "$KEY_NAME.revocationcert.pem" --gen-revoke "$KEY_ID"
+
+
+banner "Updating User's Keyring"
+# 9. Update User's Main Keyring from Keyservers
+gpg --refresh-keys
+
+banner "Cleanup"
+# 10. Reminder to Store Keys Securely
+echo "Store the '$KEY_NAME-$TIMESTAMP.secretkey.pem', '$KEY_NAME.publickey.pem', and '$KEY_NAME.revocationcert.pem' files in a secure location."
+
+# 11. Delete Temporary GNUPG_HOME
+rm -rf "$GNUPG_HOME"
+
+# (Optional) Display a success message
+echo "GPG key and certificate management complete."

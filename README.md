@@ -25,7 +25,7 @@
 1. Run `gpg-renew-prepare` with key id and private key file name as arguments
 
     ```bash
-    scripts/gpg-renew-prepare yogendrarampuria-secretkey.pem
+    scripts/gpg-renew-prepare yogendrarampuria.secretkey.pem
     ```
 
 1. Follow instruction in the [renew page](RENEW.md) to renew expiry
@@ -33,7 +33,7 @@
 1. Finalize the (Publish and clean up) key
 
     ```bash
-    scripts/gpg-renew-finalize yogendrarampuria-secretkey.pem
+    scripts/gpg-renew-finalize yogendrarampuria.secretkey.pem
     ```
 
 1. Delete working area
