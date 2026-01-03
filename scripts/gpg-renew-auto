@@ -40,7 +40,7 @@
 #
 set -Eeuo pipefail
 SCRIPT_DIR=$(cd `dirname "$BASH_SOURCE[@]"`; pwd)
-CREDS_HOOK=$SCRIPT_DIR/creds-op
+CREDS_HOOK=${CREDS_HOOK:-$SCRIPT_DIR/creds-op}
 if [ ! -x "$CREDS_HOOK" ]; then
   echo "ERROR: $CREDS_HOOK does not exists or is not executable."
   exit 1
