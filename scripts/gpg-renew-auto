@@ -49,7 +49,7 @@ if [ -z "$KEY_ID" ]; then
   exit 1
 fi
 
-echo 'trust\n5\ny\nsave' | gpg --homedir "$GNUPG_HOME" --expert --command-fd=0 --batch --edit-key $KEY_ID
+printf 'trust\n5\ny\nquit\n' | gpg --homedir "$GNUPG_HOME" --expert --command-fd 0 --edit-key "$KEY_ID"
 gpg --homedir "$GNUPG_HOME" -K --with-subkey-fingerprint --list-options=show-unusable-subkeys
 
 echo "Imported Key ID: $KEY_ID"
@@ -61,8 +61,8 @@ mv "$KEY_NAME.secretkey.pem" "$KEY_NAME-$TIMESTAMP.secretkey.pem"
 mv "$KEY_NAME.publickey.pem" "$KEY_NAME-$TIMESTAMP.publickey.pem"
 
 banner "Setting Key Expiration for Main Key and All Subkeys"
-echo -e "expire\n${EXPIRATION_MONTHS}m\nsave\n" | gpg --homedir "$GNUPG_HOME" --expert --command-fd 0 --batch --edit-key "$KEY_ID"
-echo -e "key 1\nkey 2\nexpire\ny\n${EXPIRATION_MONTHS}m\ny\nsave\n" | gpg --homedir "$GNUPG_HOME" --expert --command-fd 0 --batch --edit-key "$KEY_ID"
+echo -e "expire\n${EXPIRATION_MONTHS}m\nquit\n" | gpg --homedir "$GNUPG_HOME" --expert --command-fd 0 --batch --edit-key "$KEY_ID"
+echo -e "key 1\nkey 2\nexpire\ny\n${EXPIRATION_MONTHS}m\ny\quit\n" | gpg --homedir "$GNUPG_HOME" --expert --command-fd 0 --batch --edit-key "$KEY_ID"
 
 
 gpg --homedir "$GNUPG_HOME" -K --with-subkey-fingerprint --list-options=show-unusable-subkeys
@@ -82,7 +82,7 @@ done
 
 banner "Generating Revocation Certificate"
 # 8. Generate Revocation Certificate (Non-interactively, directly in KEY_DIR)
-rm "$KEY_NAME.revocationcert.pem"
+mv "$KEY_NAME.revocationcert.pem" "$KEY_NAME-$TIMESTAMP.revocationcert.pem"
 echo -e "y\n1\nDO NOT USE\n\ny\n" | gpg --homedir "$GNUPG_HOME" --command-fd=0 --output "$KEY_NAME.revocationcert.pem" --gen-revoke "$KEY_ID"
 
 
