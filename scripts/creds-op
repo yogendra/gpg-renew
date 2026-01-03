@@ -106,11 +106,15 @@ function restore_gpg_keys() {
   op read "$OP_RC_URL" > $RC
   
 }
+function get_key_password(){
+  op read "$OP_SK_PASSWORD_URL"
+}
 function usage(){
   echo "Usage: $0 <command>"
   echo "Commands:"
-  echo "  backup  - Backup cert and revocation cert to 1Password after expiry is extended"
-  echo "  restore - Restore key, cert and revocation cert files from 1Password"
+  echo "  backup   - Backup cert and revocation cert to 1Password after expiry is extended"
+  echo "  restore  - Restore key, cert and revocation cert files from 1Password"
+  echo "  password - Get private key encryption password"
   exit 1
 }
 
@@ -121,6 +125,8 @@ elif [ "$1" == "backup" ]; then
   backup_gpg_keys
 elif [ "$1" == "restore" ]; then  
   restore_gpg_keys
+elif [ "$1" == "password" ]; then  
+  get_key_password
 else
   usage
   exit 1
