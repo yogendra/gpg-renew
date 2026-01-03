@@ -33,14 +33,17 @@ fi
 
 # Check if key files exist in current directory (KEY_DIR)
 if [ ! -f "$KEY_NAME.secretkey.pem" ] || \
-   [ ! -f "$KEY_NAME.publickey.pem" ]; then
-  echo "Error: Key or certificate files not found in the current directory."
+   [ ! -f "$KEY_NAME.publickey.pem" ] || \
+   [ ! -f "$KEY_NAME.revocationcert.pem" ]; then
+  echo "Error: Key, certificate and revocation certificates are required. "
   exit 1
 fi
 
 banner "Importing Keys"
+
 # 2. Load Keys from KEY_DIR
 gpg --homedir "$GNUPG_HOME" --import "$KEY_NAME.secretkey.pem" "$KEY_NAME.publickey.pem"
+
 # 3. Extract Key ID
 KEY_ID=$(gpg --homedir "$GNUPG_HOME" --list-secret-keys --with-colons | awk -F ':' '$1 == "sec" {print $5}' | head -n 1)
 
@@ -54,12 +57,13 @@ gpg --homedir "$GNUPG_HOME" -K --with-subkey-fingerprint --list-options=show-unu
 
 echo "Imported Key ID: $KEY_ID"
 
+
+# 4. Backup Existing cert with Timestamp in KEY_DIR
 banner "Backing Up Existing Keys"
-# 4. Backup Existing Keys with Timestamp in KEY_DIR
 TIMESTAMP=$(date +%Y-%m-%d)
-mv "$KEY_NAME.secretkey.pem" "$KEY_NAME-$TIMESTAMP.secretkey.pem"
 mv "$KEY_NAME.publickey.pem" "$KEY_NAME-$TIMESTAMP.publickey.pem"
 
+# 5. Extend the expiry
 banner "Setting Key Expiration for Main Key and All Subkeys"
 echo -e "expire\n${EXPIRATION_MONTHS}m\nquit\n" | gpg --homedir "$GNUPG_HOME" --expert --command-fd 0 --batch --edit-key "$KEY_ID"
 echo -e "key 1\nkey 2\nexpire\ny\n${EXPIRATION_MONTHS}m\ny\quit\n" | gpg --homedir "$GNUPG_HOME" --expert --command-fd 0 --batch --edit-key "$KEY_ID"
@@ -67,8 +71,10 @@ echo -e "key 1\nkey 2\nexpire\ny\n${EXPIRATION_MONTHS}m\ny\quit\n" | gpg --homed
 
 gpg --homedir "$GNUPG_HOME" -K --with-subkey-fingerprint --list-options=show-unusable-subkeys
 
-banner "Extracting New Certificate"
+
 # 6. Extract New Certificate
+banner "Extracting New Certificate"
+
 gpg --homedir "$GNUPG_HOME" --output "$KEY_NAME.publickey.pem" --export "$KEY_ID"
 
 banner "Publishing to Keyservers"
