@@ -29,3 +29,16 @@
     ```bash
     rm -rf .gpg *.pem
     ```
+
+
+## Clean up Docs
+
+1. Secret key: Unchanged. No Need to Store. Just delete local copy
+2. Public Key: Changed. 
+   1. Add <keyname>.<timestamp>.publickey.pem to Credential Repo / **archive**
+   2. Delete Credential Repo / Live / <keyname>.publickey.pem
+   3. Add <keyname>.publickey.pem to Credential Repo / **live**
+3. Revocation Cert Changed
+   1. Add <keyname>.<timestamp>.revocationcert.pem to Credential Repo / **archive**
+   2. Delete Credential Repo / Live / <keyname>.revocationcert.pem
+   3. Add <keyname>.revocationcert.pem to Credential Repo / **live**
