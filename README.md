@@ -18,11 +18,10 @@
     ```
 
 4. Store away cert and revocation cert in safe place.
-   1. <keyid><date>.secretkey.pem (Backup of old key)
-   2. <keyid><date>.publickey.pem (Backup of old cert)
-   3. <keyid><date>.revocationcert.pem (Backup of old revocation key)
-   4. <keyid>.revocationcert.pem
-   5. <keyid>.publickey.pem
+   1. <keyid>-<date>.publickey.pem (Backup of old cert)
+   2. <keyid>-<date>.revocationcert.pem (Backup of old revocation key)
+   3. <keyid>.revocationcert.pem
+   4. <keyid>.publickey.pem
 
 5. Delete working area. Delete .gpg and exported files (*.pem, new and backup)
 
@@ -34,11 +33,11 @@
 ## Clean up Docs
 
 1. Secret key: Unchanged. No Need to Store. Just delete local copy
-2. Public Key: Changed. 
-   1. Add <keyname>.<timestamp>.publickey.pem to Credential Repo / **archive**
+2. Public Key: Changed. Backup and delete
+   1. Add <keyname>-<timestamp>.publickey.pem to Credential Repo / **archive**
    2. Delete Credential Repo / Live / <keyname>.publickey.pem
    3. Add <keyname>.publickey.pem to Credential Repo / **live**
-3. Revocation Cert Changed
-   1. Add <keyname>.<timestamp>.revocationcert.pem to Credential Repo / **archive**
+3. Revocation Cert Changed. Backup and delete
+   1. Add <keyname>-<timestamp>.revocationcert.pem to Credential Repo / **archive**
    2. Delete Credential Repo / Live / <keyname>.revocationcert.pem
    3. Add <keyname>.revocationcert.pem to Credential Repo / **live**
