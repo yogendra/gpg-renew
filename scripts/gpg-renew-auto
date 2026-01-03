@@ -1,4 +1,43 @@
 #!/usr/bin/env bash
+# Purpose:
+#   This script automates the process of renewing GPG keys, including extending their expiration,
+#   generating new public keys and revocation certificates, and backing them up to 1Password.
+#   It integrates with a `creds-op` script for secure handling of GPG credentials.
+#
+# Description:
+#   The script performs the following steps:
+#   1. Validates input parameters (key name and expiration in months).
+#   2. Restores existing GPG keys (secret key, public key, revocation certificate) from 1Password
+#      using the `creds-op` helper script.
+#   3. Imports the restored keys into a temporary GnuPG home directory.
+#   4. Extracts the GPG Key ID.
+#   5. Establishes trust for the imported keys.
+#   6. Backs up the existing public key and revocation certificate with a timestamp.
+#   7. Extends the expiration date of the main key and sub-keys.
+#   8. Exports the newly updated public key.
+#   9. Publishes the updated public key to configured keyservers.
+#   10. Generates a new revocation certificate.
+#   11. Refreshes the user's main GnuPG keyring.
+#   12. Backs up the new public key and revocation certificate to 1Password.
+#   13. Cleans up temporary files and directories.
+#
+# Requirements:
+#   Environment Variables:
+#     - OP_GPG_VAULT      : Vault name in 1Password containing GPG credentials.
+#     - OP_GPG_ITEM_UUID  : UUID of the 1Password item holding GPG keys and certificates.
+#
+#   Commands:
+#     - gpg               : GnuPG command-line tool.
+#     - op                : 1Password CLI tool.
+#     - date              : For generating timestamps.
+#     - mv                : For moving files.
+#     - rm                : For removing files/directories.
+#     - mkdir             : For creating directories.
+#     - chmod             : For changing file permissions.
+#     - awk               : For text processing.
+#     - sed               : For text processing.
+#     - dirname           : For getting directory name.
+#
 set -Eeuo pipefail
 SCRIPT_DIR=$(cd `dirname "$BASH_SOURCE[@]"`; pwd)
 CREDS_HOOK=$SCRIPT_DIR/creds-op
