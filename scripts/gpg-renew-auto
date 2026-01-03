@@ -1,28 +1,20 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-SCRIPT_DIR=$(cd `dirname "$0"`| pwd)
+SCRIPT_DIR=$(cd `dirname "$BASH_SOURCE[@]"`; pwd)
 CREDS_HOOK=$SCRIPT_DIR/creds-op
 if [ ! -x "$CREDS_HOOK" ]; then
   echo "ERROR: $CREDS_HOOK does not exists or is not executable."
   exit 1
 fi
-TIMESTAMP=$(date +%Y-%m-%d)
-SK=$KEY_NAME.secretkey.pem
-PK=$KEY_NAME.publickey.pem
-RC=$KEY_NAME.revocationcert.pem
-SK_BACKUP=$KEY_NAME-$TIMESTAMP.secretkey.pem
-PK_BACKUP=$KEY_NAME-$TIMESTAMP.publickey.pem
-RC_BACKUP=$KEY_NAME-$TIMESTAMP.revocationcert.pem
-
-
 
 function banner() {
   local message="$1"
-  local width=60  # Adjust width as needed
+  local width=80  # Adjust width as needed
   local padding=$(( (width - ${#message}) / 2 ))
 
   echo
-  printf '%*s\n' $((padding + ${#message})) "$message"
+  printf '=%.0s' $(seq 1 $width)
+  printf '\n%*s\n' $((padding + ${#message})) "$message"
   printf '=%.0s' $(seq 1 $width)
   echo
 }
@@ -36,6 +28,16 @@ fi
 KEY_NAME="$1"
 EXPIRATION_MONTHS="$2"
 
+KEY_PASSWORD=$(creds-op password)
+TIMESTAMP=$(date +%Y-%m-%d)
+SK=$KEY_NAME.secretkey.pem
+PK=$KEY_NAME.publickey.pem
+RC=$KEY_NAME.revocationcert.pem
+SK_BACKUP=$KEY_NAME-$TIMESTAMP.secretkey.pem
+PK_BACKUP=$KEY_NAME-$TIMESTAMP.publickey.pem
+RC_BACKUP=$KEY_NAME-$TIMESTAMP.revocationcert.pem
+
+
 # Set GNUPG_HOME to the private directory
 GNUPG_HOME="$PWD/.gpg"
 export GNUPG_HOME
@@ -46,7 +48,34 @@ if [ ! -d "$GNUPG_HOME" ]; then
   chmod 700 "$GNUPG_HOME"
 fi
 
-echo "Restore current keys ($SK, $PK, $RC)"
+function gpg_edit_key (){
+  KEY_ID="$1"
+  gpg --homedir "$GNUPG_HOME" --pinentry-mode loopback --passphrase "$KEY_PASSWORD" --expert --command-fd 0 --batch --yes --edit-key "$KEY_ID"
+}
+function gpg_show_keys(){
+  gpg --homedir "$GNUPG_HOME" -K --with-subkey-fingerprint --list-options=show-unusable-subkeys
+}
+function gpg_import_keys(){
+  SK="$1"
+  PK="$2"
+  gpg --homedir "$GNUPG_HOME" --pinentry-mode loopback --passphrase "$KEY_PASSWORD" --expert --command-fd 0 --batch --import "$SK" "$PK"
+}
+
+banner "
+  :::: Run Config ::::
+  CREDS_HOOK          = $CREDS_HOOK
+  TIMSTAMP            = $TIMESTAMP
+  KEY_NAME            = $KEY_NAME
+  EXPIRATION_MONTHS   = $EXPIRATION_MONTHS
+  SK                  = $SK
+  PK                  = $PK
+  RC                  = $RC
+  SK_BACKUP           = $SK_BACKUP
+  PK_BACKUP           = $PK_BACKUP
+  RC_BACKUP           = $RC_BACKUP
+"
+
+banner "Restore current keys ($SK, $PK, $RC)"
 $CREDS_HOOK restore 
 
 # Check if key files exist in current directory (KEY_DIR)
@@ -60,7 +89,7 @@ fi
 banner "Importing Keys"
 
 # 2. Load Keys from KEY_DIR
-gpg --homedir "$GNUPG_HOME" --import "$SK" "$PK"
+gpg_import_keys "$SK" "$PK"
 
 # 3. Extract Key ID
 KEY_ID=$(gpg --homedir "$GNUPG_HOME" --list-secret-keys --with-colons | awk -F ':' '$1 == "sec" {print $5}' | head -n 1)
@@ -70,8 +99,10 @@ if [ -z "$KEY_ID" ]; then
   exit 1
 fi
 
-printf 'trust\n5\ny\nquit\n' | gpg --homedir "$GNUPG_HOME" --expert --command-fd 0 --edit-key "$KEY_ID"
-gpg --homedir "$GNUPG_HOME" -K --with-subkey-fingerprint --list-options=show-unusable-subkeys
+banner "Trusting imported keys"
+
+printf 'trust\n5\ny\nquit\n' | gpg_edit_key $KEY_ID
+gpg_show_keys
 
 echo "Imported Key ID: $KEY_ID"
 
@@ -84,22 +115,26 @@ banner "Backing Up Existing Keys"
 mv "$PK" "$PK_BACKUP"
 
 # 5. Extend the expiry
-banner "Setting Key Expiration for Main Key and All Subkeys"
-echo -e "expire\n${EXPIRATION_MONTHS}m\nquit\n" | gpg --homedir "$GNUPG_HOME" --expert --command-fd 0 --batch --edit-key "$KEY_ID"
-echo -e "key 1\nkey 2\nexpire\ny\n${EXPIRATION_MONTHS}m\ny\quit\n" | gpg --homedir "$GNUPG_HOME" --expert --command-fd 0 --batch --edit-key "$KEY_ID"
+banner "Setting Key Expiration for Main Key"
 
+echo -e "expire\n${EXPIRATION_MONTHS}m\nsave\nquit\n" | gpg_edit_key "$KEY_ID"
 
-gpg --homedir "$GNUPG_HOME" -K --with-subkey-fingerprint --list-options=show-unusable-subkeys
+gpg_show_keys
 
+banner "Setting Key Expiration for Sub-Keys"
+  
+echo -e "key 1\nkey 2\nexpire\ny\n${EXPIRATION_MONTHS}m\nsave\nquit\n" | gpg_edit_key "$KEY_ID"
+
+gpg_show_keys
 
 # 6. Extract New Certificate
 banner "Extracting New Certificate"
 
 gpg --homedir "$GNUPG_HOME" --armor --output "$KEY_NAME.publickey.pem" --export "$KEY_ID"
-
+exit 1
 banner "Publishing to Keyservers"
 # # 7. Publish to Keyservers (Add more keyservers as needed)
-for KID in $(gpg --homedir "$GNUPG_HOME" -K --with-subkey-fingerprint --list-options=show-unusable-subkeys --with-colons | awk -F ':' '$1 == "fpr" {print $10}' )
+for KID in $(gpg --homedir "$GNUPG_HOME" --armor --output "$KEY_NAME.publickey.pem" --export "$KEY_ID" | awk -F ':' '$1 == "fpr" {print $10}' )
 do
   gpg --homedir "$GNUPG_HOME" --keyserver hkps://keys.openpgp.org --send-keys "$KID"
   gpg --homedir "$GNUPG_HOME" --keyserver hkp://keyserver.ubuntu.com --send-keys "$KID"
@@ -113,13 +148,15 @@ echo -e "y\n1\nDO NOT USE\n\ny\n" | gpg --homedir "$GNUPG_HOME" --command-fd=0 -
 
 
 banner "Updating User's Keyring"
+
 # 9. Update User's Main Keyring from Keyservers
 gpg --refresh-keys
 
 banner "Cleanup"
-# 10. Reminder to Store Keys Securely
-echo "Backup $PK, $RC, '$PK_BACKUP', and '$RC_BACKUP' into secure location / credential store."
+# 10. Backup keys and certs
 creds-op backup
+
+echo "Remove $PK, $RC, '$PK_BACKUP', and '$RC_BACKUP'"
 
 # 11. Delete Temporary GNUPG_HOME
 rm -rf "$GNUPG_HOME"
