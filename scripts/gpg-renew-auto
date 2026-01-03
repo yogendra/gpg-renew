@@ -1,7 +1,22 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+SCRIPT_DIR=$(cd `dirname "$0"`| pwd)
+CREDS_HOOK=$SCRIPT_DIR/creds-op
+if [ ! -x "$CREDS_HOOK" ]; then
+  echo "ERROR: $CREDS_HOOK does not exists or is not executable."
+  exit 1
+fi
+TIMESTAMP=$(date +%Y-%m-%d)
+SK=$KEY_NAME.secretkey.pem
+PK=$KEY_NAME.publickey.pem
+RC=$KEY_NAME.revocationcert.pem
+SK_BACKUP=$KEY_NAME-$TIMESTAMP.secretkey.pem
+PK_BACKUP=$KEY_NAME-$TIMESTAMP.publickey.pem
+RC_BACKUP=$KEY_NAME-$TIMESTAMP.revocationcert.pem
 
-banner() {
+
+
+function banner() {
   local message="$1"
   local width=60  # Adjust width as needed
   local padding=$(( (width - ${#message}) / 2 ))
@@ -31,10 +46,13 @@ if [ ! -d "$GNUPG_HOME" ]; then
   chmod 700 "$GNUPG_HOME"
 fi
 
+echo "Restore current keys ($SK, $PK, $RC)"
+$CREDS_HOOK restore 
+
 # Check if key files exist in current directory (KEY_DIR)
-if [ ! -f "$KEY_NAME.secretkey.pem" ] || \
-   [ ! -f "$KEY_NAME.publickey.pem" ] || \
-   [ ! -f "$KEY_NAME.revocationcert.pem" ]; then
+if [ ! -f "$SK" ] || \
+   [ ! -f "$PK" ] || \
+   [ ! -f "$RC" ]; then
   echo "Error: Key, certificate and revocation certificates are required. "
   exit 1
 fi
@@ -42,7 +60,7 @@ fi
 banner "Importing Keys"
 
 # 2. Load Keys from KEY_DIR
-gpg --homedir "$GNUPG_HOME" --import "$KEY_NAME.secretkey.pem" "$KEY_NAME.publickey.pem"
+gpg --homedir "$GNUPG_HOME" --import "$SK" "$PK"
 
 # 3. Extract Key ID
 KEY_ID=$(gpg --homedir "$GNUPG_HOME" --list-secret-keys --with-colons | awk -F ':' '$1 == "sec" {print $5}' | head -n 1)
@@ -57,11 +75,13 @@ gpg --homedir "$GNUPG_HOME" -K --with-subkey-fingerprint --list-options=show-unu
 
 echo "Imported Key ID: $KEY_ID"
 
+# 3a. Remove secret key 
+rm $SK
 
 # 4. Backup Existing cert with Timestamp in KEY_DIR
 banner "Backing Up Existing Keys"
-TIMESTAMP=$(date +%Y-%m-%d)
-mv "$KEY_NAME.publickey.pem" "$KEY_NAME-$TIMESTAMP.publickey.pem"
+
+mv "$PK" "$PK_BACKUP"
 
 # 5. Extend the expiry
 banner "Setting Key Expiration for Main Key and All Subkeys"
@@ -75,7 +95,7 @@ gpg --homedir "$GNUPG_HOME" -K --with-subkey-fingerprint --list-options=show-unu
 # 6. Extract New Certificate
 banner "Extracting New Certificate"
 
-gpg --homedir "$GNUPG_HOME" --output "$KEY_NAME.publickey.pem" --export "$KEY_ID"
+gpg --homedir "$GNUPG_HOME" --armor --output "$KEY_NAME.publickey.pem" --export "$KEY_ID"
 
 banner "Publishing to Keyservers"
 # # 7. Publish to Keyservers (Add more keyservers as needed)
@@ -88,8 +108,8 @@ done
 
 banner "Generating Revocation Certificate"
 # 8. Generate Revocation Certificate (Non-interactively, directly in KEY_DIR)
-mv "$KEY_NAME.revocationcert.pem" "$KEY_NAME-$TIMESTAMP.revocationcert.pem"
-echo -e "y\n1\nDO NOT USE\n\ny\n" | gpg --homedir "$GNUPG_HOME" --command-fd=0 --output "$KEY_NAME.revocationcert.pem" --gen-revoke "$KEY_ID"
+mv "$RC" "$RC_BACKUP"
+echo -e "y\n1\nDO NOT USE\n\ny\n" | gpg --homedir "$GNUPG_HOME" --command-fd=0 --output "$RC" --gen-revoke "$KEY_ID"
 
 
 banner "Updating User's Keyring"
@@ -98,7 +118,8 @@ gpg --refresh-keys
 
 banner "Cleanup"
 # 10. Reminder to Store Keys Securely
-echo "Store the '$KEY_NAME-$TIMESTAMP.secretkey.pem', '$KEY_NAME.publickey.pem', and '$KEY_NAME.revocationcert.pem' files in a secure location."
+echo "Backup $PK, $RC, '$PK_BACKUP', and '$RC_BACKUP' into secure location / credential store."
+creds-op backup
 
 # 11. Delete Temporary GNUPG_HOME
 rm -rf "$GNUPG_HOME"
