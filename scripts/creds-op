@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+
+# Script to backup and restore keys to and from 1Password
+# Requirement:
+#   Environemnt Variable: 
+#     OP_GPG_VAULT      : Vault name of the 1password containing gpg creds item
+#     OP_GPG_ITEM_UUID  : UUID of the item in 1password that has keys and certs 
+#.    KEY_NAME          : file name prefix for all key related files
+
+set -Eeuo pipefail
+
+if [[ -z $KEY_NAME ]]; then
+  echo "ERROR: KEY_NAME not set"
+  exit 1
+fi
+
+if [[ -z $OP_GPG_VAULT ]]; then
+  echo "ERROR: OP_GPG_VAULT not set"
+  exit 1
+fi
+
+if [[ -z $OP_GPG_ITEM_UUID ]]; then
+  echo "ERROR: OP_GPG_ITEM_UUID not set"
+  exit 1
+fi
+
+OP_GPG_ITEM="op://$OP_GPG_VAULT/$OP_GPG_ITEM_UUID"
+
+
+TIMESTAMP=$(date +%Y-%m-%d)
+
+SK=$KEY_NAME.secretkey.pem
+PK=$KEY_NAME.publickey.pem
+RC=$KEY_NAME.revocationcert.pem
+PK_BACKUP=$KEY_NAME-$TIMESTAMP.publickey.pem
+RC_BACKUP=$KEY_NAME-$TIMESTAMP.revocationcert.pem
+
+SEC_LIVE="live"
+SEC_ARCHIVES="archives"
+
+OP_SK_PASSWORD_URL="$OP_GPG_ITEM/password"
+OP_SK_URL="$OP_GPG_ITEM/$SEC_LIVE/$SK?attribute=content"
+OP_PK_URL="$OP_GPG_ITEM/$SEC_LIVE/$PK?attribute=content"
+OP_RC_URL="$OP_GPG_ITEM/$SEC_LIVE/$RC?attribute=content"
+
+
+
+function backup_gpg_keys() {
+  
+  # Check if file $PK_BACKUP exists else show error
+  if [[ ! -f $PK_BACKUP ]]; then
+    echo "ERROR: $PK_BACKUP does not exist"
+    exit 1
+  fi
+  
+  # Check if file $RC_BACKUP exists else show error
+  if [[ ! -f $RC_BACKUP ]]; then
+    echo "ERROR: $RC_BACKUP does not exist"
+    exit 1
+  fi
+
+  # Check if file $PK exists else show error
+  if [[ ! -f $PK ]]; then
+    echo "ERROR: $PK does not exist"
+    exit 1
+  fi
+
+
+  # Check if file $RC exists else show error
+  if [[ ! -f $RC ]]; then
+    echo "ERROR: $RC does not exist"
+    exit 1
+  fi
+
+
+  PK_BACKUP_FIELD=$(echo $PK_BACKUP| sed 's/\./\\./g')
+  RC_BACKUP_FIELD=$(echo $RC_BACKUP|  sed 's/\./\\./g')
+  PK_FIELD=$(echo $PK|  sed 's/\./\\./g')
+  RC_FIELD=$(echo $RC|  sed 's/\./\\./g')
+  
+  # Put  files 
+  #   PK_BACKUP  into $OP_GPG_ITEM / $SEC_ARCHIVES section 
+  #   $RC_BACKUP  into $OP_GPG_ITEM / $SEC_ARCHIVES section 
+  #   $PK into $OP_GPG_ITEM / $SEC_LIVE section 
+  #   $RC into $OP_GPG_ITEM / $SEC_LIVE section 
+  echo "Backup $PK_BACKUP, $RC_BACKUP, $PK and $RC to 1Password"
+  op item edit  --vault $OP_GPG_VAULT  "$OP_GPG_ITEM_UUID" \
+    "$SEC_ARCHIVES.$PK_BACKUP_FIELD[file]=$PK_BACKUP" \
+    "$SEC_ARCHIVES.$RC_BACKUP_FIELD[file]=$RC_BACKUP" \
+    "$SEC_LIVE.$PK_FIELD[file]=$PK" \
+    "$SEC_LIVE.$RC_FIELD[file]=$RC"
+}
+
+function restore_gpg_keys() {
+
+  # Get $OP_SK_URL and store (replace) into file $SK
+  echo "Restoring $SK from 1Password"
+  op read "$OP_SK_URL" > $SK
+
+  # Get $OP_PK_URL and store (replace) into file $PK
+  echo "Restoring $PK from 1Password"
+  op read "$OP_PK_URL" > $PK
+
+  echo "Restoring $RC from 1Password"
+  # Get $OP_RC_URL and store (replace) into file $RC
+  op read "$OP_RC_URL" > $RC
+  
+}
+function usage(){
+  echo "Usage: $0 <command>"
+  echo "Commands:"
+  echo "  backup  - Backup cert and revocation cert to 1Password after expiry is extended"
+  echo "  restore - Restore key, cert and revocation cert files from 1Password"
+  exit 1
+}
+
+if [[ $# -ne 1 ]]; then
+  usage
+  exit 1
+elif [ "$1" == "backup" ]; then  
+  backup_gpg_keys
+elif [ "$1" == "restore" ]; then  
+  restore_gpg_keys
+else
+  usage
+  exit 1
+fi
